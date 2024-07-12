@@ -1,4 +1,5 @@
 from logging import WARNING, basicConfig, warning
+from pprint import pprint
 from random import randint
 from re import sub
 from sqlite3 import Cursor, Error, connect
@@ -111,6 +112,13 @@ def main() -> None:
         cursor = connection.cursor()
 
         [table(cursor, name) for name in TABLES.keys()]
+
+        for id in range(1, 4):
+            print(f' Task #{id} '.center(80, '-'))
+
+            with open(f'query_{id}.sql', encoding='utf-8') as file:
+                cursor.execute(file.read())
+                pprint(cursor.fetchall())
 
         try:
             connection.commit()
