@@ -5,19 +5,38 @@ from sqlite3 import Cursor, Error, connect
 
 from faker import Faker
 
+STUDENTS = randint(30, 50)
+SUBJECTS = randint(5, 8)
+
+fake = Faker()
+
+
+def grades() -> list[tuple]:
+    results = []
+
+    for student in range(1, STUDENTS + 1):
+        for _ in range(randint(0, 20)):
+            results.append((randint(0, 100), student, randint(1, SUBJECTS)))
+
+    return results
+
+
 TABLES = {
     'groups': {
         'type': 'CHAR(5) UNIQUE',
         'value': lambda: '{}-{}{}'.format(
+            # Two-letter abbreviation of the name of the specialty.
             sub(r'[^A-Z]', '', fake.name())[:2],
+            # Academic year number.
             randint(1, 5),
+            # Serial number of the group of students in the educational stream.
             randint(1, 3)
         ),
         'rows': 3
     },
     'students': {
         'relations': ('groups',),
-        'rows': randint(30, 50)
+        'rows': STUDENTS
     },
     'teachers': {
         'rows': randint(3, 5)
@@ -25,18 +44,15 @@ TABLES = {
     'subjects': {
         'relations': ('teachers',),
         'value': lambda: fake.job(),
-        'rows': randint(5, 8)
+        'rows': SUBJECTS
     },
     'grades': {
         'relations': ('students', 'subjects'),
         'column': 'value',
         'type': 'TINYINT UNSIGNED',
-        'value': lambda: randint(0, 100),
-        'rows': randint(0, 20)
+        'rows': grades
     }
 }
-
-fake = Faker()
 
 
 def table(cursor: Cursor, name: str) -> None:
@@ -73,12 +89,19 @@ def table(cursor: Cursor, name: str) -> None:
         VALUES ({",".join(["?" for _ in range(len(columns))])})
     '''
 
-    cursor.executemany(
-        query,
-        [(TABLES[name].get('value', fake.name)(),
-          *[randint(1, TABLES[relation]['rows']) for relation in relations])
-         for _ in range(TABLES[name]['rows'])]
-    )
+    if isinstance(TABLES[name]['rows'], int):
+        sequence = [
+            (
+                TABLES[name].get('value', fake.name)(),
+                *[randint(1, TABLES[relation]['rows'])
+                  for relation in relations]
+            )
+            for _ in range(TABLES[name]['rows'])
+        ]
+    else:
+        sequence = TABLES[name]['rows']()
+
+    cursor.executemany(query, sequence)
 
 
 def main() -> None:
