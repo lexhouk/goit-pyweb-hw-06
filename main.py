@@ -1,9 +1,18 @@
 from logging import WARNING, basicConfig, warning
 from random import randint
+from re import sub
 from sqlite3 import Cursor, Error, connect
+
+from faker import Faker
 
 TABLES = {
     'groups': {
+        'type': 'CHAR(5) UNIQUE',
+        'value': lambda: '{}-{}{}'.format(
+            sub(r'[^A-Z]', '', fake.name())[:2],
+            randint(1, 5),
+            randint(1, 3)
+        ),
         'rows': 3
     },
     'students': {
@@ -15,15 +24,19 @@ TABLES = {
     },
     'subjects': {
         'relations': ('teachers',),
+        'value': lambda: fake.job(),
         'rows': randint(5, 8)
     },
     'grades': {
         'relations': ('students', 'subjects'),
         'column': 'value',
         'type': 'TINYINT UNSIGNED',
+        'value': lambda: randint(0, 100),
         'rows': randint(0, 20)
     }
 }
+
+fake = Faker()
 
 
 def table(cursor: Cursor, name: str) -> None:
@@ -62,9 +75,9 @@ def table(cursor: Cursor, name: str) -> None:
 
     cursor.executemany(
         query,
-        [(f'{name.title()}  #{id + 1}',
+        [(TABLES[name].get('value', fake.name)(),
           *[randint(1, TABLES[relation]['rows']) for relation in relations])
-         for id in range(TABLES[name]['rows'])]
+         for _ in range(TABLES[name]['rows'])]
     )
 
 
