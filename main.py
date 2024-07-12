@@ -1,24 +1,71 @@
 from logging import WARNING, basicConfig, warning
+from random import randint
 from sqlite3 import Cursor, Error, connect
 
+TABLES = {
+    'groups': {
+        'rows': 3
+    },
+    'students': {
+        'relations': ('groups',),
+        'rows': randint(30, 50)
+    },
+    'teachers': {
+        'rows': randint(3, 5)
+    },
+    'subjects': {
+        'relations': ('teachers',),
+        'rows': randint(5, 8)
+    },
+    'grades': {
+        'relations': ('students', 'subjects'),
+        'column': 'value',
+        'type': 'TINYINT UNSIGNED',
+        'rows': randint(0, 20)
+    }
+}
 
-class Table:
-    def __init__(self, cursor: Cursor, name: str, column: str) -> None:
-        cursor.execute('DROP TABLE IF EXISTS ' + name)
 
-        query = f'''
-            CREATE TABLE {name}
-            (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                {column} VARCHAR(100) UNIQUE NOT NULL
-            )
-        '''
+def table(cursor: Cursor, name: str) -> None:
+    cursor.execute(f'DROP TABLE IF EXISTS {name}')
 
-        cursor.execute(query)
+    column = TABLES[name].get('column', 'name')
+    type = TABLES[name].get('type', 'VARCHAR(100) UNIQUE')
+    columns = {column: f'{type} NOT NULL'}
+    constraints = []
+    relations = TABLES[name].get('relations', ())
 
-        cursor.executemany(f'INSERT INTO {name} ({column}) VALUES (?)',
-                           [(f'{name[:-1].title()}  #{id + 1}',)
-                            for id in range(5)])
+    for relation in relations:
+        columns[f'{relation[:-1]}_id'] = 'INTEGER'
+
+        constraints.append(f'''FOREIGN KEY ({relation[:-1]}_id)
+                            REFERENCES {relation} (id)
+                            ON DELETE CASCADE
+                            ON UPDATE CASCADE''')
+
+    query = f'''
+        CREATE TABLE {name}
+        (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            {",".join(f"{key} {value}" for key, value in columns.items())}
+            {"," if constraints else ""}
+            {",".join(constraints)}
+        )
+    '''
+
+    cursor.execute(query)
+
+    query = f'''
+        INSERT INTO {name} ({",".join(columns.keys())})
+        VALUES ({",".join(["?" for _ in range(len(columns))])})
+    '''
+
+    cursor.executemany(
+        query,
+        [(f'{name.title()}  #{id + 1}',
+          *[randint(1, TABLES[relation]['rows']) for relation in relations])
+         for id in range(TABLES[name]['rows'])]
+    )
 
 
 def main() -> None:
@@ -27,8 +74,7 @@ def main() -> None:
     with connect('db.sqlite') as connection:
         cursor = connection.cursor()
 
-        for name in ('students', 'groups', 'teachers', 'subjects', 'grades'):
-            Table(cursor, name, 'value' if name == 'grades' else 'name')
+        [table(cursor, name) for name in TABLES.keys()]
 
         try:
             connection.commit()
