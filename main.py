@@ -1,7 +1,8 @@
 from logging import WARNING, basicConfig, warning
+from pathlib import Path
 from pprint import pprint
 from random import randint
-from re import sub
+from re import search, sub
 from sqlite3 import Cursor, Error, connect
 
 from faker import Faker
@@ -113,7 +114,11 @@ def main() -> None:
 
         [table(cursor, name) for name in TABLES.keys()]
 
-        for id in range(1, 4):
+        ids = [int(result.group(1))
+               for path in Path('.').glob('query_*.sql')
+               if (result := search(r'^query_(\d+)\.sql$', path.name))]
+
+        for id in sorted(ids):
             print(f' Task #{id} '.center(80, '-'))
 
             with open(f'query_{id}.sql', encoding='utf-8') as file:
